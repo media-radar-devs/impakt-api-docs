@@ -1,70 +1,60 @@
-# Referencia · Licitaciones v1
+# Licitaciones v1
 
-Todos los endpoints v1 requieren `x-api-key: <API_KEY>`. Las solicitudes y respuestas de ejemplo son ficticias.
+Todas las consultas v1 requieren el header `x-api-key: <API_KEY>`.
 
-## Flujo de consulta
+## Consultas disponibles
 
-1. Consultar el catálogo para descubrir los días disponibles y su estado.
-2. Consultar el índice si se necesitan solo códigos o comparar registros locales.
-3. Obtener el listado del día en resumen o completo, utilizando paginación.
-4. Consultar un detalle cuando se necesite actualizar un código concreto.
-5. Volver a consultar los días pendientes y actualizar la copia local por código.
-
-`dia` corresponde al día del listado de Mercado Público; no debe interpretarse como un filtro por la fecha de inicio o cierre de una licitación.
-
-## Endpoints
-
-| Método y ruta | Propósito | Respuesta |
-|---|---|---|
-| GET `/api/v1/licitaciones/catalog` | Descubrir días disponibles | `{"dias":[...]}` |
-| GET `/api/v1/licitaciones/index?dia=YYYY-MM-DD` | Obtener códigos de un día | `{"dia":"...","count":2,"codigos":[...]}` |
-| GET `/api/v1/licitaciones` | Consultar registros de un día | `{"dia":"...","modo":"...","count":2,"licitaciones":[...]}` |
-| GET `/api/v1/licitaciones/{external_id}` | Obtener un registro completo | Objeto normalizado, sin envoltura |
-
-`catalog` no requiere parámetros. En `index`, `dia` es obligatorio. Codifique el identificador como segmento de URL al solicitar un detalle.
-
-## Catálogo y estado de los días
-
-Cada elemento de `dias` incluye:
-
-| Campo | Significado |
+| GET | Qué entrega |
 |---|---|
-| `fecha` | Día del listado |
-| `count` | Cantidad de detalles completados |
-| `checksum` | Identificador corto del checksum del día, de hasta 10 caracteres |
-| `last_modified` | Fecha y hora de actualización del registro del día |
-| `status` | `pending`, `complete`, `expired` o `failed` |
+| `/api/v1/licitaciones/catalog` | Días disponibles, cantidad de detalles y estado |
+| `/api/v1/licitaciones/index?dia=YYYY-MM-DD` | Códigos de un día |
+| `/api/v1/licitaciones` | Registros de un día, con filtros y paginación |
+| `/api/v1/licitaciones/{external_id}` | Detalle completo de un código |
 
-Los días se devuelven del más reciente al más antiguo. `count` indica los detalles completados, no necesariamente todos los anunciados originalmente por la fuente. Un día `pending` puede incorporar más detalles en consultas posteriores. `complete` describe el estado de procesamiento del listado; una licitación puede cambiar posteriormente en su fuente.
+`dia` es el día del listado de Mercado Público. En `index` es obligatorio. Codifique `external_id` como segmento de URL para solicitar un detalle.
 
-Use `checksum` y `last_modified` como señales para revisar el día; no como una garantía de que el dato externo nunca volverá a cambiar. Coordine con Impakt la política de actualización que requiera su caso de uso.
-
-## Parámetros del listado diario
-
-| Parámetro | Predeterminado | Regla |
-|---|---|---|
-| `dia` | Día actual del servidor | Fecha `YYYY-MM-DD`; se recomienda enviarla explícitamente |
-| `modo` | `completo` | `completo` o `resumen`; `light` y `ligero` son alias de resumen |
-| `limit` | Todos los coincidentes | De 1 a 5000; usar un valor explícito |
-| `offset` | `0` | Entero mayor o igual a 0 |
-| `region` | Sin filtro | Coincidencia sin distinguir mayúsculas |
-| `tipo` | Sin filtro | Tipo de licitación, por ejemplo `LP` |
-| `fecha_inicio_desde` | Sin filtro | `started_at >=` fecha/hora |
-| `fecha_inicio_hasta` | Sin filtro | `started_at <=` fecha/hora |
-| `fecha_fin_desde` | Sin filtro | `finalized_at >=` fecha/hora |
-| `fecha_fin_hasta` | Sin filtro | `finalized_at <=` fecha/hora |
-
-Los filtros se combinan con AND. Las fechas aceptan fecha o fecha y hora ISO 8601. Envíe nombres de región y tipo completos, sin comodines `*` o `%`. Los resultados se ordenan por `published_at` descendente.
-
-### Solicitud con filtros
+## Catálogo
 
 ```http
-GET <BASE_URL>/api/v1/licitaciones?dia=2026-10-08&modo=resumen&tipo=LP&limit=100&offset=0
-Accept: application/json
+GET <BASE_URL>/api/v1/licitaciones/catalog
 x-api-key: <API_KEY>
 ```
 
-### Respuesta en resumen
+```json
+{
+  "dias": [
+    {
+      "fecha": "2026-10-08",
+      "count": 2,
+      "checksum": "a1b2c3d4e5",
+      "last_modified": "2026-10-08T12:00:00-03:00",
+      "status": "complete"
+    }
+  ]
+}
+```
+
+Los días aparecen del más reciente al más antiguo. `count` indica detalles completados. `status` puede ser `pending`, `complete`, `expired` o `failed`. Un día pendiente puede incorporar más registros; revíselo en consultas posteriores. `checksum` y `last_modified` ayudan a identificar cambios del día.
+
+## Listado: parámetros
+
+| Parámetro | Predeterminado | Uso |
+|---|---|---|
+| `dia` | Día del servidor | `YYYY-MM-DD`; se recomienda enviarlo |
+| `modo` | `completo` | `completo` o `resumen`; `light` y `ligero` son alias de resumen |
+| `limit` | Todos los coincidentes | De 1 a 5000 |
+| `offset` | `0` | Entero mayor o igual a 0 |
+| `region` | Sin filtro | Nombre de región, sin distinguir mayúsculas |
+| `tipo` | Sin filtro | Tipo, por ejemplo `LP`, sin distinguir mayúsculas |
+| `fecha_inicio_desde` / `fecha_inicio_hasta` | Sin filtro | Límites inclusivos sobre `started_at` |
+| `fecha_fin_desde` / `fecha_fin_hasta` | Sin filtro | Límites inclusivos sobre `finalized_at` |
+
+Los filtros se combinan con AND. Las fechas de inicio y fin aceptan fecha o fecha/hora ISO 8601. Envíe región y tipo sin comodines. Los resultados se ordenan por `published_at` descendente.
+
+```http
+GET <BASE_URL>/api/v1/licitaciones?dia=2026-10-08&modo=resumen&tipo=LP&limit=100&offset=0
+x-api-key: <API_KEY>
+```
 
 ```json
 {
@@ -99,59 +89,36 @@ x-api-key: <API_KEY>
 }
 ```
 
-Los códigos de estado, tipo, categorías y visibilidad provienen de la fuente. Confirme su interpretación para el uso de negocio; no deduzca el significado de un código a partir de un solo ejemplo.
+## Completo y detalle
 
-### Respuesta completa y detalle
-
-`modo=completo` devuelve objetos normalizados dentro de `licitaciones`. El endpoint de detalle devuelve uno de esos objetos directamente.
+`modo=completo` mantiene la envoltura del listado y entrega registros con los siguientes campos. La consulta por código devuelve el objeto directamente.
 
 | Campos | Contenido |
 |---|---|
-| `id`, `external_id` | Identificadores interno y de la fuente |
-| `name`, `description`, `organization`, `url` | Descripción, organismo y enlace |
+| `id`, `external_id` | Identificadores del registro y de la fuente |
+| `name`, `description`, `organization`, `url` | Nombre, descripción, organismo y enlace |
 | `amount`, `currency`, `amount_visibility` | Monto, moneda y visibilidad |
-| `status`, `tender_type`, `region`, `categories` | Clasificación y ubicación |
+| `status`, `tender_type`, `region`, `categories` | Estado y clasificación |
 | `publish_date`, `close_date` | Fechas de publicación y cierre |
-| `published_at`, `started_at`, `finalized_at`, `closes_at` | Fechas y horas normalizadas |
-| `days_to_close` | Valor de días al cierre registrado por la fuente; puede variar o faltar |
-| `raw_data` | Detalle de origen, incluidos comprador e ítems cuando están disponibles |
+| `published_at`, `started_at`, `finalized_at`, `closes_at` | Fechas y horas |
+| `days_to_close` | Días al cierre registrados por la fuente |
+| `raw_data` | Detalle de origen, incluidos comprador e ítems disponibles |
 | `content_hash`, `created_at`, `updated_at` | Metadatos del registro |
 
-Los campos opcionales pueden ser `null` y `categories` puede estar vacío. `raw_data` conserva la estructura de la fuente y puede contener campos adicionales; no debe suponerse una forma idéntica para todas las licitaciones.
+Los códigos de estado, tipo y categorías provienen de Mercado Público. Los campos opcionales pueden ser `null`; `categories` puede estar vacío. `raw_data` puede incluir campos adicionales.
 
-## Paginación
+## Índice y paginación
 
-`count` es la cantidad recibida en esa respuesta, después de filtros y paginación; no es el total de coincidencias del día.
+El índice devuelve `{"dia":"2026-10-08","count":1,"codigos":["EJEMPLO-01-LP26"]}`.
 
-Con `limit=100`:
+En el listado, `count` es la cantidad de la página, después de filtros. Para recorrer el día, use `limit=100`, comience en `offset=0` e incremente el offset en la cantidad recibida. Termine al recibir menos de 100 registros.
 
-1. Solicitar `offset=0`.
-2. Procesar y guardar los resultados por identificador.
-3. Incrementar `offset` en la cantidad recibida.
-4. Terminar cuando la cantidad recibida sea menor que 100.
+Guarde por código y vuelva a consultar los días pendientes: sus resultados pueden cambiar entre páginas. Un día sin coincidencias devuelve `200` con `count: 0` y un arreglo vacío.
 
-Una consulta sin coincidencias devuelve `200`, `count: 0` y `licitaciones: []`. El índice de un día sin registros devuelve `codigos: []`.
+## Errores específicos
 
-La paginación no entrega un token de instantánea. En días en actualización puede cambiar el contenido entre páginas: use operaciones idempotentes y vuelva a revisar los días pendientes. Para lotes históricos, comience por días completos.
+Modo o filtro de fecha/hora inválido: `400`. Clave ausente o incorrecta: `403`. Código inexistente: `404`. Día, límite u offset inválidos: `422`. Consulta no habilitada: `503`.
 
-## Errores
+## Licitaciones abiertas
 
-| HTTP | Caso |
-|---|---|
-| `400` | Modo desconocido o filtro de fecha/hora inválido |
-| `403` | Clave ausente o incorrecta |
-| `404` | Código inexistente |
-| `422` | Día inválido, límite fuera de rango u offset negativo |
-| `503` | Credencial de consumo no configurada en el servicio |
-
-Ejemplo:
-
-```json
-{"detail": "Invalid API key"}
-```
-
-## Consulta pública de abiertas
-
-`GET /api/licitaciones` devuelve un arreglo completo de registros con fecha de cierre igual o posterior al día actual del servidor. No acepta filtros ni paginación y actualmente no requiere clave. La selección se realiza por fecha de cierre; no equivale a filtrar por un código de estado específico.
-
-La respuesta puede ser considerablemente mayor que una página de v1. Para una integración por lotes o histórica, use v1 con límites explícitos.
+`GET /api/licitaciones` devuelve un arreglo de registros completos cuya fecha de cierre es igual o posterior al día del servidor. La selección es por fecha de cierre. No requiere clave ni acepta filtros o paginación. Para consultas históricas o por lotes, use v1 con límites explícitos.
