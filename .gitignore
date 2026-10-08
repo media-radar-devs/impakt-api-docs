@@ -1,0 +1,12 @@
+# Credenciales y configuración local
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+credentials*.json
+service-account*.json
+
+# Archivos locales
+.DS_Store
+Thumbs.db
